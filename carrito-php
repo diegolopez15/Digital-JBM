@@ -1,0 +1,140 @@
+<?php
+session_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// --- INICIALIZAR CARRITO SI NO EXISTE ---
+if (!isset($_SESSION['carrito']) || !is_array($_SESSION['carrito'])) {
+    $_SESSION['carrito'] = [];
+}
+
+// --- AGREGAR O ACTUALIZAR PRODUCTO EN EL CARRITO ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_al_carrito'])) {
+    // Obtener y limpiar datos del formulario
+    $id_catalogo = isset($_POST['id_catalogo']) ? trim($_POST['id_catalogo']) : '';
+    $descripcion = isset($_POST['descripcion']) ? trim($_POST['descripcion']) : '';
+    $precio = isset($_POST['precio']) ? (float)preg_replace('/[^0-9.]/', '', $_POST['precio']) : 0;
+
+    // Solo continuar si los datos son válidos
+    if (!empty($id_catalogo) && !empty($descripcion) && $precio > 0) {
+        $producto_nuevo = [
+            'id_catalogo' => $id_catalogo,
+            'descripcion' => $descripcion,
+            'precio' => $precio,
+            'cantidad' => 1
+        ];
+
+        // Verificar si el producto ya existe en el carrito
+        $existe = false;
+        foreach ($_SESSION['carrito'] as $key => $item) {
+            if ($item['id_catalogo'] === $id_catalogo) {
+                $_SESSION['carrito'][$key]['cantidad']++;
+                $existe = true;
+                break;
+            }
+        }
+
+        // Agregar producto nuevo si no existe
+        if (!$existe) {
+            $_SESSION['carrito'][] = $producto_nuevo;
+        }
+
+        // Redirigir para evitar reenvíos de formulario
+        header('Location: carrito.php');
+        exit();
+    }
+}
+
+// --- ELIMINAR PRODUCTO DEL CARRITO ---
+if (isset($_GET['eliminar']) && is_numeric($_GET['eliminar'])) {
+    $indice = (int)$_GET['eliminar'];
+    if (isset($_SESSION['carrito'][$indice])) {
+        unset($_SESSION['carrito'][$indice]);
+        // Reorganizar índices para evitar espacios vacíos
+        $_SESSION['carrito'] = array_values($_SESSION['carrito']);
+    }
+    header('Location: carrito.php');
+    exit();
+}
+
+// --- CALCULAR TOTAL GENERAL ---
+$total_general = 0;
+if (!empty($_SESSION['carrito'])) {
+    foreach ($_SESSION['carrito'] as $item) {
+        $subtotal = (float)$item['precio'] * (int)$item['cantidad'];
+        $total_general += $subtotal;
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Carrito de Compras</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .total { font-weight: bold; font-size: 1.2rem; margin-top: 20px; }
+        .form-cliente { margin-top: 30px; }
+        .form-group { margin: 10px 0; }
+        label { display: inline-block; width: 150px; }
+        input { padding: 5px; width: 300px; }
+        button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .eliminar { color: red; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>Carrito de Compras</h1>
+
+    <?php if (!empty($_SESSION['carrito'])): ?>
+        <table>
+            <tr>
+                <th>Producto</th>
+                <th>Precio Unitario</th>
+                <th>Cantidad</th>
+                <th>Subtotal</th>
+                <th>Acciones</th>
+            </tr>
+            <?php foreach ($_SESSION['carrito'] as $indice => $item): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars($item['descripcion']); ?></td>
+                    <td>$<?php echo number_format($item['precio'], 2); ?></td>
+                    <td><?php echo (int)$item['cantidad']; ?></td>
+                    <td>$<?php echo number_format((float)$item['precio'] * (int)$item['cantidad'], 2); ?></td>
+                    <td><a href="carrito.php?eliminar=<?php echo $indice; ?>" class="eliminar">Eliminar</a></td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
+
+        <div class="total">Total General: $<?php echo number_format($total_general, 2); ?></div>
+
+        <!-- Formulario de datos del cliente -->
+        <div class="form-cliente">
+            <h3>Datos del Cliente</h3>
+            <form method="POST" action="procesar_pedido.php"> <!-- Asegúrate de la ruta correcta -->
+                <div class="form-group">
+                    <label for="nombre_cliente">Nombre completo *</label>
+                    <input type="text" id="nombre_cliente" name="nombre_cliente" required>
+                </div>
+                <div class="form-group">
+                    <label for="correo_cliente">Correo electrónico *</label>
+                    <input type="email" id="correo_cliente" name="correo_cliente" required>
+                </div>
+                <div class="form-group">
+                    <label for="telefono_cliente">Teléfono</label>
+                    <input type="text" id="telefono_cliente" name="telefono_cliente">
+                </div>
+                <div class="form-group">
+                    <label for="direccion_cliente">Dirección</label>
+                    <input type="text" id="direccion_cliente" name="direccion_cliente">
+                </div>
+                <button type="submit">Enviar Pedido</button>
+            </form>
+        </div>
+    <?php else: ?>
+        <p>El carrito está vacío. <a href="shop.php">Volver a la tienda</a></p>
+    <?php endif; ?>
+</body>
+</html>
